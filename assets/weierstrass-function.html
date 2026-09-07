@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Weierstrass function explorer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: light-dark(#ffffff, #151515);
+      --fg: light-dark(#171717, #f2f2f2);
+      --muted: light-dark(#666666, #aaaaaa);
+      --grid: light-dark(#dddddd, #3b3b3b);
+      --line: light-dark(#5b38d1, #a994ff);
+      --accent: light-dark(#c43b65, #ff83a7);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 18px; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
+    h2 { margin: 0 0 4px; font-size: 20px; }
+    p { margin: 0 0 14px; color: var(--muted); }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; margin-bottom: 14px; }
+    label { display: grid; gap: 5px; }
+    .value { font-variant-numeric: tabular-nums; color: var(--fg); }
+    input { width: 100%; }
+    canvas { display: block; width: 100%; height: 360px; border: 1px solid var(--grid); }
+    .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; color: var(--muted); }
+    .key::before { content: ""; display: inline-block; width: 22px; height: 3px; margin-right: 7px; vertical-align: middle; background: var(--line); }
+    .key.accent::before { background: var(--accent); }
+    @media (max-width: 520px) {
+      body { padding: 12px; }
+      .controls { grid-template-columns: 1fr; gap: 10px; }
+      canvas { height: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <h2>A continuous function with detail at every scale</h2>
+  <p>Increase the number of terms, then zoom in. New oscillations keep appearing.</p>
+  <div class="controls">
+    <label>
+      <span>Terms: <output id="terms-value" class="value">8</output></span>
+      <input id="terms" type="range" min="1" max="9" value="8" step="1">
+    </label>
+    <label>
+      <span>Zoom: <output id="zoom-value" class="value">1×</output></span>
+      <input id="zoom" type="range" min="0" max="6" value="0" step="1">
+    </label>
+  </div>
+  <canvas id="plot" role="img" aria-label="Interactive graph of a finite approximation to the Weierstrass function"></canvas>
+  <div class="legend">
+    <span class="key">Partial sum</span>
+    <span class="key accent">Current viewing interval</span>
+  </div>
+  <script>
+    (() => {
+      const canvas = document.getElementById("plot");
+      const terms = document.getElementById("terms");
+      const zoom = document.getElementById("zoom");
+      const termsValue = document.getElementById("terms-value");
+      const zoomValue = document.getElementById("zoom-value");
+      const a = 0.6;
+      const b = 11;
+
+      function css(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function w(x, count) {
+        let sum = 0;
+        let amplitude = 1;
+        let frequency = 1;
+        for (let k = 0; k < count; k += 1) {
+          sum += amplitude * Math.cos(Math.PI * frequency * x);
+          amplitude *= a;
+          frequency *= b;
+        }
+        return sum;
+      }
+
+      function draw() {
+        const ratio = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.round(rect.width * ratio));
+        canvas.height = Math.max(1, Math.round(rect.height * ratio));
+        const ctx = canvas.getContext("2d");
+        ctx.scale(ratio, ratio);
+
+        const width = rect.width;
+        const height = rect.height;
+        const margin = { left: 52, right: 16, top: 18, bottom: 38 };
+        const plotW = width - margin.left - margin.right;
+        const plotH = height - margin.top - margin.bottom;
+        const count = Number(terms.value);
+        const level = Number(zoom.value);
+        const span = 1 / Math.pow(2, level);
+        const center = 0.5;
+        const xMin = center - span / 2;
+        const xMax = center + span / 2;
+        const samples = Math.max(800, Math.round(plotW * 2));
+        const values = [];
+
+        for (let i = 0; i <= samples; i += 1) {
+          const x = xMin + (xMax - xMin) * i / samples;
+          values.push({ x, y: w(x, count) });
+        }
+
+        let yMin = Infinity;
+        let yMax = -Infinity;
+        for (const point of values) {
+          yMin = Math.min(yMin, point.y);
+          yMax = Math.max(yMax, point.y);
+        }
+        const pad = Math.max(0.05, (yMax - yMin) * 0.12);
+        yMin -= pad;
+        yMax += pad;
+        const sx = x => margin.left + (x - xMin) / (xMax - xMin) * plotW;
+        const sy = y => margin.top + (yMax - y) / (yMax - yMin) * plotH;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = css("--grid");
+        ctx.fillStyle = css("--muted");
+        ctx.lineWidth = 1;
+        ctx.font = "12px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+
+        for (let i = 0; i <= 4; i += 1) {
+          const px = margin.left + plotW * i / 4;
+          ctx.beginPath();
+          ctx.moveTo(px, margin.top);
+          ctx.lineTo(px, margin.top + plotH);
+          ctx.stroke();
+          const value = xMin + (xMax - xMin) * i / 4;
+          ctx.fillText(value.toFixed(level < 2 ? 2 : level + 1), px, margin.top + plotH + 8);
+        }
+        for (let i = 0; i <= 4; i += 1) {
+          const py = margin.top + plotH * i / 4;
+          ctx.beginPath();
+          ctx.moveTo(margin.left, py);
+          ctx.lineTo(margin.left + plotW, py);
+          ctx.stroke();
+        }
+
+        ctx.strokeStyle = css("--line");
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        values.forEach((point, index) => {
+          if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+          else ctx.lineTo(sx(point.x), sy(point.y));
+        });
+        ctx.stroke();
+
+        ctx.strokeStyle = css("--accent");
+        ctx.lineWidth = 2;
+        ctx.strokeRect(margin.left, margin.top, plotW, plotH);
+        ctx.fillStyle = css("--muted");
+        ctx.textAlign = "right";
+        ctx.fillText("x", margin.left + plotW, height - 18);
+        termsValue.value = String(count);
+        zoomValue.value = Math.pow(2, level) + "×";
+      }
+
+      terms.addEventListener("input", draw);
+      zoom.addEventListener("input", draw);
+      new ResizeObserver(draw).observe(canvas);
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+      draw();
+    })();
+  </script>
+</body>
+</html>

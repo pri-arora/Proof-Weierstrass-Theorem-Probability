@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Taylor approximation of cosine</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: light-dark(#ffffff, #151515);
+      --fg: light-dark(#171717, #f2f2f2);
+      --muted: light-dark(#666666, #aaaaaa);
+      --grid: light-dark(#dddddd, #3b3b3b);
+      --cos: light-dark(#156d9a, #67c5f3);
+      --poly: light-dark(#d14b28, #ff9478);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 18px; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
+    h2 { margin: 0 0 4px; font-size: 20px; }
+    p { margin: 0 0 14px; color: var(--muted); }
+    .control { display: grid; gap: 5px; margin-bottom: 14px; }
+    input { width: 100%; }
+    output { font-variant-numeric: tabular-nums; }
+    canvas { display: block; width: 100%; height: 360px; border: 1px solid var(--grid); }
+    .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; color: var(--muted); }
+    .key::before { content: ""; display: inline-block; width: 22px; height: 3px; margin-right: 7px; vertical-align: middle; background: var(--cos); }
+    .key.poly::before { background: var(--poly); }
+    @media (max-width: 520px) {
+      body { padding: 12px; }
+      canvas { height: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <h2>Taylor polynomials anchored at zero</h2>
+  <p>Increase the degree to give the polynomial more derivative information at the anchor point.</p>
+  <label class="control">
+    <span>Degree: <output id="degree-value">4</output> &nbsp; Maximum error on the plotted interval: <output id="error-value">—</output></span>
+    <input id="terms" type="range" min="0" max="12" value="2" step="1">
+  </label>
+  <canvas id="plot" role="img" aria-label="Cosine and its Taylor polynomial centered at zero"></canvas>
+  <div class="legend">
+    <span class="key">cos(x)</span>
+    <span class="key poly">Taylor polynomial</span>
+  </div>
+  <script>
+    (() => {
+      const canvas = document.getElementById("plot");
+      const slider = document.getElementById("terms");
+      const degreeValue = document.getElementById("degree-value");
+      const errorValue = document.getElementById("error-value");
+
+      function css(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function taylorCos(x, terms) {
+        let sum = 1;
+        let term = 1;
+        for (let j = 1; j <= terms; j += 1) {
+          term *= -x * x / ((2 * j - 1) * (2 * j));
+          sum += term;
+        }
+        return sum;
+      }
+
+      function draw() {
+        const ratio = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.round(rect.width * ratio));
+        canvas.height = Math.max(1, Math.round(rect.height * ratio));
+        const ctx = canvas.getContext("2d");
+        ctx.scale(ratio, ratio);
+
+        const width = rect.width;
+        const height = rect.height;
+        const margin = { left: 52, right: 16, top: 18, bottom: 38 };
+        const plotW = width - margin.left - margin.right;
+        const plotH = height - margin.top - margin.bottom;
+        const terms = Number(slider.value);
+        const xMin = -2 * Math.PI;
+        const xMax = 2 * Math.PI;
+        const samples = Math.max(800, Math.round(plotW * 2));
+        const values = [];
+        let maxError = 0;
+
+        for (let i = 0; i <= samples; i += 1) {
+          const x = xMin + (xMax - xMin) * i / samples;
+          const actual = Math.cos(x);
+          const approximation = taylorCos(x, terms);
+          maxError = Math.max(maxError, Math.abs(actual - approximation));
+          values.push({ x, actual, approximation });
+        }
+
+        let yMin = Math.min(-1.25, ...values.map(point => point.approximation));
+        let yMax = Math.max(1.25, ...values.map(point => point.approximation));
+        const visibleSpan = yMax - yMin;
+        if (visibleSpan > 12) {
+          yMin = -6;
+          yMax = 6;
+        }
+        const sx = x => margin.left + (x - xMin) / (xMax - xMin) * plotW;
+        const sy = y => margin.top + (yMax - y) / (yMax - yMin) * plotH;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = css("--grid");
+        ctx.fillStyle = css("--muted");
+        ctx.lineWidth = 1;
+        ctx.font = "12px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+
+        const xTicks = [
+          { value: -2 * Math.PI, label: "−2π" },
+          { value: -Math.PI, label: "−π" },
+          { value: 0, label: "0" },
+          { value: Math.PI, label: "π" },
+          { value: 2 * Math.PI, label: "2π" }
+        ];
+        for (const tick of xTicks) {
+          const px = sx(tick.value);
+          ctx.beginPath();
+          ctx.moveTo(px, margin.top);
+          ctx.lineTo(px, margin.top + plotH);
+          ctx.stroke();
+          ctx.fillText(tick.label, px, margin.top + plotH + 8);
+        }
+        for (let i = 0; i <= 4; i += 1) {
+          const py = margin.top + plotH * i / 4;
+          ctx.beginPath();
+          ctx.moveTo(margin.left, py);
+          ctx.lineTo(margin.left + plotW, py);
+          ctx.stroke();
+        }
+
+        function line(key, color, widthPx) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(margin.left, margin.top, plotW, plotH);
+          ctx.clip();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = widthPx;
+          ctx.beginPath();
+          values.forEach((point, index) => {
+            const px = sx(point.x);
+            const py = sy(point[key]);
+            if (index === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        line("actual", css("--cos"), 2.5);
+        line("approximation", css("--poly"), 2);
+
+        ctx.strokeStyle = css("--fg");
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(sx(0), margin.top);
+        ctx.lineTo(sx(0), margin.top + plotH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = css("--fg");
+        ctx.textAlign = "left";
+        ctx.fillText("anchor x = 0", sx(0) + 7, margin.top + 7);
+
+        degreeValue.value = String(2 * terms);
+        errorValue.value = maxError < 0.0001 ? maxError.toExponential(2) : maxError.toFixed(4);
+      }
+
+      slider.addEventListener("input", draw);
+      new ResizeObserver(draw).observe(canvas);
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+      draw();
+    })();
+  </script>
+</body>
+</html>
