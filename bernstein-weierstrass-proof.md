@@ -323,7 +323,7 @@ If the required $N$ depended on $x$, the argument would prove only pointwise con
 
 ## Visual intuition
 
-We basically chopped the interval [0,1 ] into n slices
+We basically chopped the interval [0,1 ] with n divisions, and with the information of 
 
 At a chosen point $x$, the coefficients
 
