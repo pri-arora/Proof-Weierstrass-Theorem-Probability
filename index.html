@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Weierstrass Approximation via Bernstein Polynomials</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --background: light-dark(#ffffff, #111111);
+      --foreground: light-dark(#202124, #eeeeee);
+      --muted: light-dark(#65676b, #aaaaaa);
+      --border: light-dark(#d8dadd, #3b3b3b);
+      --link: light-dark(#1558d6, #8ab4ff);
+      --quote: light-dark(#f3f5f7, #1e2024);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--foreground);
+      font: 17px/1.68 ui-serif, Georgia, Cambria, "Times New Roman", serif;
+    }
+    main {
+      width: min(900px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 42px 0 80px;
+    }
+    h1, h2, h3 { font-family: ui-sans-serif, system-ui, sans-serif; line-height: 1.2; }
+    h1 { margin: 0 0 24px; font-size: clamp(2rem, 6vw, 3.5rem); letter-spacing: -0.035em; }
+    h2 { margin-top: 48px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { margin-top: 30px; }
+    a { color: var(--link); }
+    blockquote { margin: 24px 0; padding: 12px 18px; background: var(--quote); border-left: 4px solid var(--link); }
+    iframe { display: block; width: 100%; margin: 22px 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); }
+    code { font-size: .92em; }
+    #article > p:has(img[src*="/previews/"]) { display: none; }
+    .loading { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; }
+    @media (max-width: 600px) {
+      main { width: min(100% - 20px, 900px); padding-top: 24px; }
+      body { font-size: 16px; }
+      iframe { height: 560px; }
+    }
+  </style>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [["$", "$"]],
+        displayMath: [["$$", "$$"]]
+      },
+      svg: { fontCache: "global" },
+      startup: { typeset: false }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+  <main id="article">
+    <p class="loading">Loading the proof…</p>
+  </main>
+  <script>
+    (() => {
+      const article = document.getElementById("article");
+      const renderer = window.markdownit({ html: true, linkify: true, typographer: true });
+
+      fetch("./bernstein-weierstrass-proof.md")
+        .then(response => {
+          if (!response.ok) throw new Error("Could not load the article.");
+          return response.text();
+        })
+        .then(source => {
+          const math = [];
+          const protectedSource = source.replace(
+            /\$\$[\s\S]*?\$\$|\$(?:\\.|[^$\n])+\$/g,
+            expression => {
+              const token = "MATHPLACEHOLDER" + math.length + "TOKEN";
+              math.push(expression);
+              return token;
+            }
+          );
+          let html = renderer.render(protectedSource);
+          html = html.replace(/MATHPLACEHOLDER(\d+)TOKEN/g, (_, index) => math[Number(index)]);
+          article.innerHTML = html;
+          document.title = article.querySelector("h1")?.textContent || document.title;
+          return window.MathJax.typesetPromise([article]);
+        })
+        .catch(error => {
+          article.innerHTML = "<h1>Weierstrass Approximation</h1><p>" + error.message + ' <a href="./bernstein-weierstrass-proof.md">Open the Markdown article.</a></p>';
+        });
+    })();
+  </script>
+</body>
+</html>
