@@ -8,7 +8,7 @@ The question is: can every continuous real-valued function on $[0,1]$ be approxi
 
 Why care? Polynomials are unusually simple objects. A four-function calculator can evaluate them, their derivatives and integrals are immediate, and many algorithms are easier to analyze or optimize when the input is polynomial.
 
-But hasn't calculus already solved this with Taylor polynomials? **Wrong.** Taylor approximation depends on derivative information at a point. The Weierstrass theorem assumes only continuity not differentiability.
+But hasn't calculus already solved this with Taylor polynomials? **Wrong.** Taylor approximation depends on derivative information at a point. The Weierstrass theorem assumes only continuity, not differentiability.
 
 In fact, in the precise sense of Baire category, a typical continuous real-valued function is nowhere differentiable. Such functions behave more like the Weierstrass function below than like the smooth curves used in introductory calculus. The explorer plots partial sums of the classical example
 
@@ -173,7 +173,7 @@ f\!\left(\frac{S_n}{n}\right)-f(x)
 \end{aligned}
 \]
 
-Now a major theme of probability is partitions to divide the sample space into what we (Mathematicians) want. Split the expectation according to whether the random point $S_n/n$ is close to $x$. Define
+Now, a major theme of probability is using partitions to divide the sample space into what we mathematicians want. Split the expectation according to whether the random point $S_n/n$ is close to $x$. Define
 
 \[
 G=\left\{\left|\frac{S_n}{n}-x\right|<\delta\right\},
@@ -321,9 +321,45 @@ The order of the quantifiers is therefore
 
 If the required $N$ depended on $x$, the argument would prove only pointwise convergence. Here it does not, which is precisely why the convergence is uniform.
 
-## Visual intuition
+## The Dual Visual Intuition
 
-We basically chopped the interval [0,1 ] with n divisions, and with the information of 
+We used coin flipping to prove this problem, so of course it is best to think of this problem in that context. But it's valuable to take a step back. Why were we able to use mathematical probability?
+
+1. The function we modeled is on the interval $[0,1]$.
+2. The central limit theorem.
+3. The function is bounded.
+
+As we flip more and more of this unfair coin and average the results, the average will dance around $[0,1]$, but soon it will converge to the true probability of heads, or the fixed point.
+
+<iframe
+  src="./assets/coin-flip-bernstein-convergence.html"
+  title="Coin-flip averages and Bernstein polynomial convergence"
+  width="100%"
+  height="720"
+  loading="lazy"
+  sandbox="allow-scripts"
+></iframe>
+
+[Open the coin-flip and Bernstein convergence simulation](./assets/coin-flip-bernstein-convergence.html)
+
+The partition of the expected-value calculation is also instructive. The set of possible $S_n/n$ values was partitioned into a middle part and two tails.
+
+<iframe
+  src="./assets/binomial-good-bad-partition.html"
+  title="The good middle and bad tails of the binomial distribution"
+  width="100%"
+  height="540"
+  loading="lazy"
+  sandbox="allow-scripts"
+></iframe>
+
+[Open the good-set and bad-set simulation](./assets/binomial-good-bad-partition.html)
+
+The middle part guarantees convergence by uniform continuity: the values of $f(x+\text{noise})$ are close enough to $f(x)$. The tails guarantee convergence because they become increasingly unlikely as $n$ increases.
+
+In the first “intuition,” we partitioned the values in the expected-value calculation. The convergence happened as $n$ increased: the weight of the good set increased, and the weight of the bad set decreased. The second intuition is more like the Taylor convergence shown at the beginning. Understand the expected-value equation as a function with anchors.
+
+We basically chopped the interval $[0,1]$ into $n$ divisions, and at each division we evaluated the function. These $y$-values work as **anchors** and pull the approximation toward the actual function. The strength of that pull is determined by the binomial distribution centered around the original fixed $x\in[0,1]$. While we are fixed at that point, with each new trial the approximating polynomial has more information about the function it is evaluating.
 
 At a chosen point $x$, the coefficients
 

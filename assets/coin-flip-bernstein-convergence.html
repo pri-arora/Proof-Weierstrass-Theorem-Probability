@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Coin averages and Bernstein convergence</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: light-dark(#fff, #151515);
+      --fg: light-dark(#171717, #f2f2f2);
+      --muted: light-dark(#666, #aaa);
+      --grid: light-dark(#ddd, #3b3b3b);
+      --target: light-dark(#5b38d1, #a994ff);
+      --sample: light-dark(#168264, #5bd5ad);
+      --curve: light-dark(#176b96, #67c5f3);
+      --poly: light-dark(#cf4c2c, #ff9478);
+      --head: light-dark(#f0b429, #ffd166);
+      --tail: light-dark(#a8a8a8, #777);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 18px; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
+    h2 { margin: 0 0 4px; font-size: 20px; }
+    p { margin: 0 0 14px; color: var(--muted); }
+    label { display: grid; gap: 5px; margin-bottom: 14px; }
+    output { font-variant-numeric: tabular-nums; }
+    input { width: 100%; }
+    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    .panel h3 { margin: 0 0 7px; font-size: 16px; font-weight: 600; }
+    canvas { display: block; width: 100%; height: 300px; border: 1px solid var(--grid); }
+    .coins { display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px; margin: 10px 0 0; }
+    .coin { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--tail); color: var(--bg); font-size: 11px; font-weight: 700; }
+    .coin.head { background: var(--head); color: light-dark(#352600, #352600); }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 9px; color: var(--muted); }
+    .key::before { content: ""; display: inline-block; width: 20px; height: 3px; margin-right: 6px; vertical-align: middle; background: var(--target); }
+    .key.sample::before { background: var(--sample); }
+    .key.curve::before { background: var(--curve); }
+    .key.poly::before { background: var(--poly); }
+    @media (max-width: 720px) {
+      body { padding: 12px; }
+      .panels { grid-template-columns: 1fr; }
+      canvas { height: 280px; }
+    }
+  </style>
+</head>
+<body>
+  <h2>The same concentration drives both pictures</h2>
+  <p>The coin has head probability <strong>x = 0.75</strong>. Increase <em>n</em> to compare the running average with the Bernstein approximation built from <em>n</em> samples.</p>
+  <label>
+    <span>Trials / subdivisions: <output id="n-value">12</output></span>
+    <input id="n" type="range" min="1" max="80" value="12" step="1">
+  </label>
+  <div class="panels">
+    <section class="panel">
+      <h3>Coin flips: Sₙ/n approaches x</h3>
+      <canvas id="average" role="img" aria-label="Running proportion of heads approaching 0.75"></canvas>
+      <div id="coins" class="coins" aria-label="Most recent coin flips"></div>
+      <div class="legend">
+        <span class="key sample">Sₙ/n</span>
+        <span class="key">Target x = 0.75</span>
+      </div>
+    </section>
+    <section class="panel">
+      <h3>Function: Bₙf approaches f</h3>
+      <canvas id="bernstein" role="img" aria-label="Bernstein polynomial approaching the original function"></canvas>
+      <div class="legend">
+        <span class="key curve">f(x)</span>
+        <span class="key poly">Bₙf(x)</span>
+      </div>
+    </section>
+  </div>
+  <script>
+    (() => {
+      const slider = document.getElementById("n");
+      const output = document.getElementById("n-value");
+      const averageCanvas = document.getElementById("average");
+      const bernsteinCanvas = document.getElementById("bernstein");
+      const coins = document.getElementById("coins");
+      const target = 0.75;
+      const flips = [];
+      let state = 20260906;
+
+      for (let i = 0; i < 80; i += 1) {
+        state = (1664525 * state + 1013904223) >>> 0;
+        flips.push(state / 4294967296 < target ? 1 : 0);
+      }
+
+      function css(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function fit(canvas) {
+        const ratio = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.round(rect.width * ratio));
+        canvas.height = Math.max(1, Math.round(rect.height * ratio));
+        const ctx = canvas.getContext("2d");
+        ctx.scale(ratio, ratio);
+        return { ctx, width: rect.width, height: rect.height };
+      }
+
+      function axes(ctx, width, height, xLabels, yMin, yMax) {
+        const margin = { left: 46, right: 13, top: 14, bottom: 34 };
+        const plotW = width - margin.left - margin.right;
+        const plotH = height - margin.top - margin.bottom;
+        ctx.strokeStyle = css("--grid");
+        ctx.fillStyle = css("--muted");
+        ctx.lineWidth = 1;
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.textBaseline = "top";
+        for (let i = 0; i <= 4; i += 1) {
+          const py = margin.top + plotH * i / 4;
+          ctx.beginPath();
+          ctx.moveTo(margin.left, py);
+          ctx.lineTo(margin.left + plotW, py);
+          ctx.stroke();
+          ctx.textAlign = "right";
+          const value = yMax - (yMax - yMin) * i / 4;
+          ctx.fillText(value.toFixed(2), margin.left - 6, py - 6);
+        }
+        xLabels.forEach((label, i) => {
+          const px = margin.left + plotW * i / (xLabels.length - 1);
+          ctx.beginPath();
+          ctx.moveTo(px, margin.top);
+          ctx.lineTo(px, margin.top + plotH);
+          ctx.stroke();
+          ctx.textAlign = "center";
+          ctx.fillText(String(label), px, margin.top + plotH + 7);
+        });
+        return { margin, plotW, plotH };
+      }
+
+      function drawAverage(n) {
+        const fitted = fit(averageCanvas);
+        const ctx = fitted.ctx;
+        const width = fitted.width;
+        const height = fitted.height;
+        ctx.clearRect(0, 0, width, height);
+        const chart = axes(ctx, width, height, [1, Math.max(1, Math.round(n / 2)), n], 0, 1);
+        const sx = i => chart.margin.left + (i - 1) / Math.max(1, n - 1) * chart.plotW;
+        const sy = value => chart.margin.top + (1 - value) * chart.plotH;
+
+        ctx.strokeStyle = css("--target");
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(chart.margin.left, sy(target));
+        ctx.lineTo(chart.margin.left + chart.plotW, sy(target));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        let heads = 0;
+        ctx.strokeStyle = css("--sample");
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let i = 1; i <= n; i += 1) {
+          heads += flips[i - 1];
+          const value = heads / i;
+          if (i === 1) ctx.moveTo(sx(i), sy(value));
+          else ctx.lineTo(sx(i), sy(value));
+        }
+        ctx.stroke();
+        const finalValue = heads / n;
+        ctx.fillStyle = css("--sample");
+        ctx.beginPath();
+        ctx.arc(sx(n), sy(finalValue), 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = css("--fg");
+        ctx.font = "12px system-ui, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText("Sₙ/n = " + finalValue.toFixed(3), chart.margin.left + chart.plotW, chart.margin.top + 5);
+
+        coins.replaceChildren();
+        flips.slice(Math.max(0, n - 20), n).forEach(value => {
+          const coin = document.createElement("span");
+          coin.className = "coin" + (value ? " head" : "");
+          coin.textContent = value ? "H" : "T";
+          coins.appendChild(coin);
+        });
+      }
+
+      function f(x) {
+        return 0.15 + 0.55 * x + 0.22 * Math.sin(3 * Math.PI * x);
+      }
+
+      function bernstein(n, x) {
+        const values = [];
+        for (let k = 0; k <= n; k += 1) values.push(f(k / n));
+        for (let level = n; level > 0; level -= 1) {
+          for (let k = 0; k < level; k += 1) {
+            values[k] = (1 - x) * values[k] + x * values[k + 1];
+          }
+        }
+        return values[0];
+      }
+
+      function drawBernstein(n) {
+        const fitted = fit(bernsteinCanvas);
+        const ctx = fitted.ctx;
+        const width = fitted.width;
+        const height = fitted.height;
+        ctx.clearRect(0, 0, width, height);
+        const chart = axes(ctx, width, height, ["0", "0.5", "1"], 0, 1);
+        const sx = x => chart.margin.left + x * chart.plotW;
+        const sy = value => chart.margin.top + (1 - value) * chart.plotH;
+        const samples = Math.max(350, Math.round(chart.plotW));
+
+        function line(evaluate, color, lineWidth) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          for (let i = 0; i <= samples; i += 1) {
+            const x = i / samples;
+            const px = sx(x);
+            const py = sy(evaluate(x));
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+
+        line(f, css("--curve"), 2.5);
+        line(x => bernstein(n, x), css("--poly"), 2.5);
+        ctx.strokeStyle = css("--target");
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(sx(target), chart.margin.top);
+        ctx.lineTo(sx(target), chart.margin.top + chart.plotH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      function draw() {
+        const n = Number(slider.value);
+        output.value = String(n);
+        drawAverage(n);
+        drawBernstein(n);
+      }
+
+      slider.addEventListener("input", draw);
+      new ResizeObserver(draw).observe(document.body);
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+      draw();
+    })();
+  </script>
+</body>
+</html>

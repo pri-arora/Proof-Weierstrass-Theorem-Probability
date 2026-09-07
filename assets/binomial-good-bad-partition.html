@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Good and bad parts of the binomial distribution</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: light-dark(#fff, #151515);
+      --fg: light-dark(#171717, #f2f2f2);
+      --muted: light-dark(#666, #aaa);
+      --grid: light-dark(#ddd, #3b3b3b);
+      --good: light-dark(#168264, #5bd5ad);
+      --bad: light-dark(#c74458, #ff8295);
+      --target: light-dark(#5b38d1, #a994ff);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 18px; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
+    h2 { margin: 0 0 4px; font-size: 20px; }
+    p { margin: 0 0 14px; color: var(--muted); }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; margin-bottom: 12px; }
+    label { display: grid; gap: 5px; }
+    output { font-variant-numeric: tabular-nums; }
+    input { width: 100%; }
+    canvas { display: block; width: 100%; height: 360px; border: 1px solid var(--grid); }
+    .summary { display: flex; flex-wrap: wrap; gap: 7px 20px; margin-top: 10px; font-variant-numeric: tabular-nums; }
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+    @media (max-width: 560px) {
+      body { padding: 12px; }
+      .controls { grid-template-columns: 1fr; gap: 10px; }
+      canvas { height: 300px; }
+    }
+  </style>
+</head>
+<body>
+  <h2>Partitioning the expected value</h2>
+  <p>Green bars are the good event |Sₙ/n − x| &lt; δ. Red bars are the two bad tails.</p>
+  <div class="controls">
+    <label>
+      <span>Trials n: <output id="n-value">20</output></span>
+      <input id="n" type="range" min="4" max="120" value="20" step="1">
+    </label>
+    <label>
+      <span>Radius δ: <output id="delta-value">0.15</output></span>
+      <input id="delta" type="range" min="0.03" max="0.35" value="0.15" step="0.01">
+    </label>
+  </div>
+  <canvas id="plot" role="img" aria-label="Binomial probability distribution divided into a good middle region and bad tails"></canvas>
+  <div class="summary" aria-live="polite">
+    <strong class="good">P(good) = <output id="good-value">—</output></strong>
+    <strong class="bad">P(bad) = <output id="bad-value">—</output></strong>
+    <span>Chebyshev bound: P(bad) ≤ <output id="bound-value">—</output></span>
+  </div>
+  <script>
+    (() => {
+      const canvas = document.getElementById("plot");
+      const nSlider = document.getElementById("n");
+      const deltaSlider = document.getElementById("delta");
+      const nValue = document.getElementById("n-value");
+      const deltaValue = document.getElementById("delta-value");
+      const goodValue = document.getElementById("good-value");
+      const badValue = document.getElementById("bad-value");
+      const boundValue = document.getElementById("bound-value");
+      const x = 0.75;
+
+      function css(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function logChoose(n, k) {
+        const smaller = Math.min(k, n - k);
+        let result = 0;
+        for (let j = 1; j <= smaller; j += 1) {
+          result += Math.log(n - smaller + j) - Math.log(j);
+        }
+        return result;
+      }
+
+      function probability(n, k) {
+        return Math.exp(logChoose(n, k) + k * Math.log(x) + (n - k) * Math.log(1 - x));
+      }
+
+      function draw() {
+        const ratio = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.round(rect.width * ratio));
+        canvas.height = Math.max(1, Math.round(rect.height * ratio));
+        const ctx = canvas.getContext("2d");
+        ctx.scale(ratio, ratio);
+
+        const width = rect.width;
+        const height = rect.height;
+        const margin = { left: 52, right: 16, top: 22, bottom: 40 };
+        const plotW = width - margin.left - margin.right;
+        const plotH = height - margin.top - margin.bottom;
+        const n = Number(nSlider.value);
+        const delta = Number(deltaSlider.value);
+        const points = [];
+        let good = 0;
+
+        for (let k = 0; k <= n; k += 1) {
+          const location = k / n;
+          const p = probability(n, k);
+          const isGood = Math.abs(location - x) < delta;
+          if (isGood) good += p;
+          points.push({ k, location, p, isGood });
+        }
+
+        const maxP = Math.max(...points.map(point => point.p));
+        const sx = location => margin.left + location * plotW;
+        const sy = p => margin.top + (1 - p / (maxP * 1.12)) * plotH;
+        const barWidth = Math.max(2, Math.min(18, plotW / (n + 1) * 0.78));
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = css("--grid");
+        ctx.fillStyle = css("--muted");
+        ctx.lineWidth = 1;
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.textBaseline = "top";
+        ctx.textAlign = "center";
+
+        for (let i = 0; i <= 4; i += 1) {
+          const px = margin.left + plotW * i / 4;
+          ctx.beginPath();
+          ctx.moveTo(px, margin.top);
+          ctx.lineTo(px, margin.top + plotH);
+          ctx.stroke();
+          ctx.fillText((i / 4).toFixed(2), px, margin.top + plotH + 8);
+        }
+        for (let i = 0; i <= 3; i += 1) {
+          const py = margin.top + plotH * i / 3;
+          ctx.beginPath();
+          ctx.moveTo(margin.left, py);
+          ctx.lineTo(margin.left + plotW, py);
+          ctx.stroke();
+        }
+
+        for (const point of points) {
+          ctx.fillStyle = point.isGood ? css("--good") : css("--bad");
+          const top = sy(point.p);
+          ctx.fillRect(sx(point.location) - barWidth / 2, top, barWidth, margin.top + plotH - top);
+        }
+
+        ctx.strokeStyle = css("--target");
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(sx(x), margin.top);
+        ctx.lineTo(sx(x), margin.top + plotH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = css("--fg");
+        ctx.textAlign = "center";
+        ctx.fillText("x − δ", sx(Math.max(0, x - delta)), margin.top + 4);
+        ctx.fillText("x", sx(x), margin.top + 4);
+        ctx.fillText("x + δ", sx(Math.min(1, x + delta)), margin.top + 4);
+        ctx.textAlign = "right";
+        ctx.fillText("possible values of Sₙ/n", margin.left + plotW, height - 17);
+
+        const bad = Math.max(0, 1 - good);
+        const bound = Math.min(1, x * (1 - x) / (n * delta * delta));
+        nValue.value = String(n);
+        deltaValue.value = delta.toFixed(2);
+        goodValue.value = good.toFixed(4);
+        badValue.value = bad.toFixed(4);
+        boundValue.value = bound.toFixed(4);
+      }
+
+      nSlider.addEventListener("input", draw);
+      deltaSlider.addEventListener("input", draw);
+      new ResizeObserver(draw).observe(canvas);
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+      draw();
+    })();
+  </script>
+</body>
+</html>
