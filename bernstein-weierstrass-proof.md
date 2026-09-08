@@ -1,6 +1,6 @@
 # Weierstrass Approximation via Bernstein Polynomials
 
-The question is: can every continuous real-valued function on $[0,1]$ be approximated arbitrarily well by a polynomial? In mathematical language, given a continuous function $f:[0,1]\to\mathbb{R}$ and any tolerance $\varepsilon>0$, can we find a polynomial $p$ for which
+The question is: can every continuous real-valued function on $[0,1]$ be approximated arbitrarily well by a polynomial? In mathematical jargon, given a continuous function $f:[0,1]\to\mathbb{R}$ and any tolerance $\varepsilon>0$, can we find a polynomial $p$ for which
 
 $$
 \sup_{x\in[0,1]} |f(x)-p(x)|<\varepsilon?
